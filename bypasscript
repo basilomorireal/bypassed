@@ -1,0 +1,509 @@
+-- Load Rayfield UI
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+-- Main Window
+local Window = Rayfield:CreateWindow({
+    Name = "COPEZ Universal Hub",
+    LoadingTitle = "COPEZ",
+    LoadingSubtitle = "Universal Script Hub",
+    ConfigurationSaving = { Enabled = true, FolderName = "CopezHub", FileName = "Settings" },
+
+        Discord = {
+      Enabled = false, -- Prompt the user to join your Discord server if their executor supports it
+      Invite = "https://discord.gg/5BU6xAQwuk", -- The Discord invite code, do not include discord.gg/. E.g. discord.gg/ ABCD would be ABCD
+      RememberJoins = true -- Set this to false to make them join the discord every time they load it up
+   },
+KeySystem = false,
+ KeySettings = {
+    Title = "Key System for the Script",
+    Subtitle = "Only one short checkpoint (30s-1m).",
+    Note = "https://h1.nu/17AGT - Key expires every week (globally). ",
+    FileName = "KeyCopez",
+    SaveKey = true,
+    GrabKeyFromSite = false, -- set true if you use Pastebin/GitHub raw
+    Key = {"09copez100"} -- your actual working key(s)
+}
+})
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local player = Players.LocalPlayer
+local mouse = player:GetMouse()
+local camera = workspace.CurrentCamera
+local Lighting = game:GetService("Lighting")
+
+-- Variables that will update on respawn
+local character, humanoid, hrp
+
+local function setupCharacter(char)
+    character = char
+    humanoid = char:WaitForChild("Humanoid")
+    hrp = char:WaitForChild("HumanoidRootPart")
+end
+
+-- Run setup when script starts
+setupCharacter(player.Character or player.CharacterAdded:Wait())
+
+-- Run setup again whenever you respawn
+player.CharacterAdded:Connect(function(char)
+    setupCharacter(char)
+end)
+
+
+
+--------------------------------------------------------
+-- ✅ MAIN (Server-visible)
+--------------------------------------------------------
+local MainTab = Window:CreateTab("Main", 4483362458)
+
+-- WalkSpeed
+MainTab:CreateSlider({
+    Name = "WalkSpeed",
+    Range = {16, 200},
+    Increment = 1,
+    Suffix = "Speed",
+    CurrentValue = 16,
+    Callback = function(Value) humanoid.WalkSpeed = Value end
+})
+local JumpSlider = MainTab:CreateSlider({
+    Name = "Jump Height",
+    Range = {50, 300}, -- min and max
+    Increment = 10,
+    Suffix = "Height",
+    CurrentValue = 50,
+    Flag = "JumpSlider",
+    Callback = function(Value)
+        local player = game.Players.LocalPlayer
+        local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+
+        if humanoid then
+            -- Force JumpPower usage (for older executors)
+            if humanoid.UseJumpPower ~= nil then
+                humanoid.UseJumpPower = true
+                humanoid.JumpPower = Value
+            end
+
+            -- Force JumpHeight usage (for updated Roblox)
+            humanoid.JumpHeight = Value / 10
+        end
+    end,
+})
+
+
+-- Infinite Jump
+local infJump = false
+MainTab:CreateToggle({
+    Name = "Infinite Jump",
+    CurrentValue = false,
+    Callback = function(Value) infJump = Value end
+})
+UIS.JumpRequest:Connect(function()
+    if infJump then humanoid:ChangeState(Enum.HumanoidStateType.Jumping) end
+end)
+MainTab:CreateToggle({
+    Name = "Auto Heal (may not work on all games)",
+    CurrentValue = false,
+    Callback = function(val)
+        if val then
+            while val do
+                task.wait(2)
+                humanoid.Health = math.min(humanoid.MaxHealth, humanoid.Health + 5)
+            end
+        end
+    end
+})
+
+MainTab:CreateToggle({
+    Name = "No Fall Damage",
+    CurrentValue = false,
+    Callback = function(val)
+        if val then
+            humanoid.StateChanged:Connect(function(_,new)
+                if new == Enum.HumanoidStateType.Freefall then
+                    humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
+                end
+            end)
+        end
+    end
+})
+-- Fly toggle
+local flying = false
+local flyBV
+MainTab:CreateToggle({
+    Name = "Fly",
+    CurrentValue = false,
+    Callback = function(Value)
+        flying = Value
+        if flying then
+            flyBV = Instance.new("BodyVelocity")
+            flyBV.MaxForce = Vector3.new(1e5,1e5,1e5)
+            flyBV.Velocity = Vector3.zero
+            flyBV.Parent = hrp
+        else
+            if flyBV then flyBV:Destroy() end
+        end
+    end
+})
+RunService.RenderStepped:Connect(function()
+    if flying and flyBV then
+        local move = Vector3.zero
+        if UIS:IsKeyDown(Enum.KeyCode.W) then move += hrp.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then move -= hrp.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then move -= hrp.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then move += hrp.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then move -= Vector3.new(0,1,0) end
+        flyBV.Velocity = move.Magnitude > 0 and move.Unit * 50 or Vector3.zero
+    end
+end)
+
+-- Noclip
+local noclip = false
+MainTab:CreateToggle({
+    Name = "Noclip",
+    CurrentValue = false,
+    Callback = function(Value) noclip = Value end
+})
+RunService.Stepped:Connect(function()
+    if noclip then
+        for _,v in pairs(character:GetDescendants()) do
+            if v:IsA("BasePart") then v.CanCollide = false end
+        end
+    end
+end)
+MainTab:CreateButton({
+    Name = "Reset Character",
+    Callback = function()
+        humanoid.Health = 0
+    end
+})
+MainTab:CreateToggle({
+    Name = "Wall Climb",
+    CurrentValue = false,
+    Callback = function(val)
+        if val then
+            RunService.RenderStepped:Connect(function()
+                if UIS:IsKeyDown(Enum.KeyCode.Space) and humanoid.MoveDirection.Magnitude > 0 then
+                    hrp.Velocity = hrp.Velocity + Vector3.new(0,50,0)
+                end
+            end)
+        end
+    end
+})
+-- Safety Platform
+local onPlatform = false
+local originalPos
+MainTab:CreateToggle({
+    Name = "Safety Platform",
+    CurrentValue = false,
+    Callback = function(Value)
+        originalPos = hrp.Position
+        onPlatform = Value
+        if onPlatform then
+            local safe = Instance.new("Part")
+            safe.Name = "SafetyPlatform"
+            safe.Size = Vector3.new(40,1,40)
+            safe.Anchored = true
+            safe.Position = hrp.Position + Vector3.new(0,500,0)
+            safe.Material = Enum.Material.Neon
+            safe.Color = Color3.fromRGB(0,255,0)
+            safe.Parent = workspace
+            hrp.CFrame = CFrame.new(safe.Position + Vector3.new(0,3,0))
+        else
+            local safe = workspace:FindFirstChild("SafetyPlatform")
+            if safe then safe:Destroy() end
+            if originalPos then hrp.CFrame = CFrame.new(originalPos) end
+        end
+    end
+})
+local ctrlclick = MainTab:CreateButton({
+   Name = "Ctrl + Click TP",
+   Callback = function()
+  local UIS = game:GetService("UserInputService")
+
+local Player = game.Players.LocalPlayer
+local Mouse = Player:GetMouse()
+
+
+function GetCharacter()
+   return game.Players.LocalPlayer.Character
+end
+
+function Teleport(pos)
+   local Char = GetCharacter()
+   if Char then
+       Char:MoveTo(pos)
+   end
+end
+
+
+UIS.InputBegan:Connect(function(input)
+   if input.UserInputType == Enum.UserInputType.MouseButton1 and UIS:IsKeyDown(Enum.KeyCode.LeftControl) then
+       Teleport(Mouse.Hit.p)
+   end
+end)
+   end,
+})
+--------------------------------------------------------
+-- ✅ CLIENT-SIDED
+--------------------------------------------------------
+local ClientTab = Window:CreateTab("Client-Sided", 4483362458)
+
+-- Anti AFK
+ClientTab:CreateButton({
+    Name = "Anti AFK",
+    Callback = function()
+        local vu = game:GetService("VirtualUser")
+        player.Idled:Connect(function()
+            vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            task.wait(1)
+            vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        end)
+    end
+})
+
+-- Dex Explorer
+ClientTab:CreateButton({
+    Name = "Open Dex Explorer",
+    Callback = function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/peyton2465/Dex/master/out.lua"))()
+    end
+})
+
+ClientTab:CreateButton({
+    Name = "Open Infinite Yield",
+    Callback = function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()
+    end
+})
+-- 1. Camera Zoom Hack
+local zoomEnabled = false
+ClientTab:CreateToggle({
+    Name = "Unlimited Camera Zoom",
+    CurrentValue = false,
+    Callback = function(val) zoomEnabled = val end
+})
+RunService.RenderStepped:Connect(function()
+    if zoomEnabled then
+        player.CameraMaxZoomDistance = math.huge
+        player.CameraMinZoomDistance = 0
+    end
+end)
+
+-- 2. FOV Slider
+local currentFOV = camera.FieldOfView
+ClientTab:CreateSlider({
+    Name = "FOV",
+    Range = {70, 200},
+    Increment = 1,
+    Suffix = "FOV",
+    CurrentValue = currentFOV,
+    Callback = function(val) camera.FieldOfView = val end
+})
+
+
+-- 5. Air Control
+local airControl = false
+ClientTab:CreateToggle({
+    Name = "Air Control",
+    CurrentValue = false,
+    Callback = function(val) airControl = val end
+})
+RunService.RenderStepped:Connect(function()
+    if airControl and not humanoid.FloorMaterial then
+        local move = Vector3.zero
+        if UIS:IsKeyDown(Enum.KeyCode.W) then move += hrp.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then move -= hrp.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then move -= hrp.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then move += hrp.CFrame.RightVector end
+        hrp.Velocity += move * 0.2
+    end
+end)
+
+-- 6. No Fog / Clear Weather
+local noFog = false
+ClientTab:CreateToggle({
+    Name = "No Fog / Clear Weather",
+    CurrentValue = false,
+    Callback = function(val) noFog = val end
+})
+RunService.RenderStepped:Connect(function()
+    if noFog then
+        Lighting.FogEnd = 100000
+        Lighting.FogStart = 0
+        Lighting.Brightness = 2
+        Lighting.ClockTime = 14
+    end
+end)
+
+-- 7. Time Manipulation
+ClientTab:CreateSlider({
+    Name = "Game Time",
+    Range = {0,24},
+    Increment = 0.1,
+    Suffix = "Hours",
+    CurrentValue = Lighting.ClockTime,
+    Callback = function(val) Lighting.ClockTime = val end
+})
+
+-- 8. Teleport Markers
+local markerPos = nil
+ClientTab:CreateButton({
+    Name = "Place Teleport Marker",
+    Callback = function()
+        markerPos = hrp.Position
+    end
+})
+ClientTab:CreateButton({
+    Name = "Teleport to Marker",
+    Callback = function()
+        if markerPos then hrp.CFrame = CFrame.new(markerPos) end
+    end
+})
+
+-- 9. Camera Shake Removal
+local noShake = false
+ClientTab:CreateToggle({
+    Name = "Remove Camera Shake",
+    CurrentValue = false,
+    Callback = function(val) noShake = val end
+})
+RunService.RenderStepped:Connect(function()
+    if noShake then
+        camera.CameraType = Enum.CameraType.Custom
+    end
+end)
+
+-- 12. Player Outline Glow
+local glowEnabled = false
+ClientTab:CreateToggle({
+    Name = "Glow Around Player",
+    CurrentValue = false,
+    Callback = function(val) glowEnabled = val end
+})
+-- Implementation via SelectionBox or Highlight
+
+-- 13. Local Sound Muter
+local muteSounds = false
+ClientTab:CreateToggle({
+    Name = "Mute Sounds Locally",
+    CurrentValue = false,
+    Callback = function(val) muteSounds = val end
+})
+RunService.RenderStepped:Connect(function()
+    if muteSounds then
+        for _, s in pairs(workspace:GetDescendants()) do
+            if s:IsA("Sound") then s.Volume = 0 end
+        end
+    end
+end)
+
+-- 14. Particle Effects Toggle
+local particlesOff = false
+ClientTab:CreateToggle({
+    Name = "Toggle Particles",
+    CurrentValue = false,
+    Callback = function(val) particlesOff = val end
+})
+RunService.RenderStepped:Connect(function()
+    if particlesOff then
+        for _, p in pairs(workspace:GetDescendants()) do
+            if p:IsA("ParticleEmitter") or p:IsA("Trail") then p.Enabled = false end
+        end
+    end
+end)
+
+-- 15. Keybind Recorder / Playback
+local recording = false
+ClientTab:CreateToggle({
+    Name = "Keybind Recorder / Playback (Coming Soon!)",
+    CurrentValue = false,
+    Callback = function(val) recording = val end
+})
+-- Advanced: store keys, replay later (implementation skipped for brevity)
+
+-- 16. Local Physics Adjuster
+local localGravity = 196.2
+ClientTab:CreateSlider({
+    Name = "Local Gravity",
+    Range = {0,500},
+    Increment = 1,
+    Suffix = "Studs",
+    CurrentValue = 196.2,
+    Callback = function(val) workspace.Gravity = val end
+})
+
+-- 17. Step Height Adjuster
+ClientTab:CreateSlider({
+    Name = "Step Height",
+    Range = {1,20},
+    Increment = 1,
+    Suffix = "Studs",
+    CurrentValue = 1,
+    Callback = function(val) humanoid.StepHeight = val end
+})
+
+-- 18. Local NPC Highlight
+local npcHighlight = false
+ClientTab:CreateToggle({
+    Name = "Highlight NPCs",
+    CurrentValue = false,
+    Callback = function(val) npcHighlight = val end
+})
+-- Implementation: Highlight instances in workspace tagged as NPCs
+
+
+-- 20. Local Water Walk
+local waterWalk = false
+ClientTab:CreateToggle({
+    Name = "Water Walk",
+    CurrentValue = false,
+    Callback = function(val) waterWalk = val end
+})
+
+
+
+
+
+--------------------------------------------------------
+-- Other Games
+--------------------------------------------------------
+local OtherGamesTab = Window:CreateTab("Other Games", 4483362458)
+    local Section = OtherGame:CreateSection("Games")
+
+
+
+
+
+--------------------------------------------------------
+--  About us
+--------------------------------------------------------
+
+    local AboutusTab = Window:CreateTab("About Us", nil)
+local joindiscord = AboutusTab:CreateSection("Join our Discord!")
+
+AboutusTab:CreateButton({
+    Name = "Copy Discord Link!",
+    Callback = function()
+        local link = "https://discord.gg/kAQqwGuazp"
+        if setclipboard then
+            setclipboard(link)
+            Rayfield:Notify({
+                Title = "Link Copied",
+                Content = "The script link has been copied to your clipboard!",
+                Duration = 3,
+                Image = 4483362458
+            })
+        else
+            Rayfield:Notify({
+                Title = "Error",
+                Content = "Your executor does not support clipboard copying.",
+                Duration = 3,
+                Image = 4483362458
+            })
+        end
+    end
+})
+
+

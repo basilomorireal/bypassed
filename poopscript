@@ -374,26 +374,47 @@ end)
 
 
 -- === Instant Interact Toggle ===
+local instantInteractConnection
+
 ClientTab:CreateToggle({
     Name = "Instant Interact (Bypass Hold E)",
     CurrentValue = false,
     Callback = function(val)
         if val then
-            -- Make all current prompts instant
+            -- Apply instantly to all existing prompts
             for _, p in pairs(ProximityPromptService:GetDescendants()) do
                 if p:IsA("ProximityPrompt") then
                     p.HoldDuration = 0
                 end
             end
-            -- Also make new prompts instant
-            ProximityPromptService.PromptAdded:Connect(function(p)
-                if p:IsA("ProximityPrompt") then
-                    p.HoldDuration = 0
-                end
-            end)
+            -- Connect once, avoid duplicate connections
+            if not instantInteractConnection then
+                instantInteractConnection = ProximityPromptService.PromptAdded:Connect(function(p)
+                    if p:IsA("ProximityPrompt") then
+                        p.HoldDuration = 0
+                    end
+                end)
+            end
+            Rayfield:Notify({
+                Title = "Instant Interact Enabled",
+                Content = "All prompts are now tap-to-use!",
+                Duration = 3
+            })
+        else
+            -- Disconnect listener when toggle is off
+            if instantInteractConnection then
+                instantInteractConnection:Disconnect()
+                instantInteractConnection = nil
+            end
+            Rayfield:Notify({
+                Title = "Instant Interact Disabled",
+                Content = "Hold E restored to default.",
+                Duration = 3
+            })
         end
     end
 })
+
 
 -- 9. Camera Shake Removal
 local noShake = false
